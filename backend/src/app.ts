@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import liveKitRoutes from "./routes/livekit.route.js";
 
 const app = express();
 
@@ -12,5 +13,7 @@ app.get("/health", (req, res) => {
     message: "Voxa backend is running",
   });
 });
+
+app.use("/api/livekit", liveKitRoutes);
 
 export default app;
