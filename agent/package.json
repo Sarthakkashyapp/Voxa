@@ -13,7 +13,10 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@livekit/agents": "^1.9.0"
+    "@livekit/agents": "^1.9.0",
+    "@livekit/agents-plugin-deepgram": "^1.9.1",
+    "@livekit/agents-plugin-google": "^1.9.1",
+    "dotenv": "^18.0.4"
   },
   "devDependencies": {
     "@types/node": "^26.6.2",

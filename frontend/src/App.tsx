@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Room } from "livekit-client";
+import { Room, RoomEvent } from "livekit-client";
 import { getLiveKitToken } from "./services/livekit";
 
 function App() {
@@ -12,22 +12,95 @@ function App() {
     try {
       setIsConnecting(true);
 
-      // 1. Ask our backend for a LiveKit token
+      console.log("Requesting LiveKit token...");
+
       const token = await getLiveKitToken("sarthak", "voxa-session-123");
 
-      // 2. Create the client-side LiveKit Room object
-      const room = new Room();
+      console.log("LiveKit token received");
 
-      // 3. Keep the same Room object across React renders
+      const room = new Room();
       roomRef.current = room;
 
-      // 4. Get our LiveKit Cloud URL
+      // Listen for remote audio/video tracks BEFORE connecting.
+      room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+        console.log("Remote track subscribed:", {
+          kind: track.kind,
+          participant: participant.identity,
+          trackSid: publication.trackSid,
+        });
+
+        if (track.kind === "audio") {
+          track.attach();
+          console.log("Remote audio track attached");
+        }
+      });
+
+      room.on(
+        RoomEvent.TrackUnsubscribed,
+        (track, publication, participant) => {
+          console.log("Remote track unsubscribed:", {
+            kind: track.kind,
+            participant: participant.identity,
+            trackSid: publication.trackSid,
+          });
+
+          track.detach();
+        },
+      );
+
+      room.on(RoomEvent.ParticipantConnected, (participant) => {
+        console.log("Remote participant connected:", {
+          identity: participant.identity,
+          sid: participant.sid,
+        });
+      });
+
+      room.on(RoomEvent.ParticipantDisconnected, (participant) => {
+        console.log("Remote participant disconnected:", {
+          identity: participant.identity,
+          sid: participant.sid,
+        });
+      });
+
+      room.on(RoomEvent.ConnectionStateChanged, (state) => {
+        console.log("LiveKit connection state:", state);
+      });
+
       const liveKitUrl = import.meta.env.VITE_LIVEKIT_URL;
 
-      // 5. Connect to LiveKit
+      if (!liveKitUrl) {
+        throw new Error("VITE_LIVEKIT_URL is not configured");
+      }
+
+      console.log("Connecting to LiveKit...");
+
       await room.connect(liveKitUrl, token);
 
-      // 6. Enable microphone
+      console.log("Connected to LiveKit room");
+
+      // Explicitly unlock browser audio playback.
+      await room.startAudio();
+
+      console.log("Can playback audio:", room.canPlaybackAudio);
+
+      // Inspect remote participants and their published tracks.
+      console.log(
+        "Remote participants:",
+        [...room.remoteParticipants.values()].map((participant) => ({
+          identity: participant.identity,
+          sid: participant.sid,
+
+          audioTracks: [...participant.audioTrackPublications.values()].map(
+            (publication) => ({
+              kind: publication.kind,
+              trackSid: publication.trackSid,
+              isSubscribed: publication.isSubscribed,
+            }),
+          ),
+        })),
+      );
+
+      // Enable microphone.
       await room.localParticipant.setMicrophoneEnabled(true);
 
       console.log(
@@ -35,10 +108,8 @@ function App() {
         room.localParticipant.isMicrophoneEnabled,
       );
 
-      // 7. Connection succeeded
       setIsConnected(true);
 
-      console.log("Connected to LiveKit room");
       console.log("Room:", room.name);
       console.log("Participant:", room.localParticipant.identity);
     } catch (error) {
