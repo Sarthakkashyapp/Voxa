@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { Room, RoomEvent } from "livekit-client";
 import { getLiveKitToken } from "./services/livekit";
+import { createSession } from "./services/session";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
@@ -12,16 +13,48 @@ function App() {
     try {
       setIsConnecting(true);
 
+      // -----------------------------------
+      // 1. Create MongoDB learning session
+      // -----------------------------------
+
+      console.log("Creating learning session...");
+
+      const session = await createSession(
+        "6ab9034b5bb706d85045a1a7",
+        "Learning Session",
+      );
+
+      console.log("MongoDB session created:", session);
+
+      const sessionId = session._id;
+
+      console.log("Session ID:", sessionId);
+
+      // -----------------------------------
+      // 2. Get LiveKit token
+      // -----------------------------------
+
       console.log("Requesting LiveKit token...");
 
-      const token = await getLiveKitToken("sarthak", "voxa-session-123");
+      const roomName = `voxa-session-${Date.now()}`;
+      // const roomName = "voxa-test-metadata";
+
+      const token = await getLiveKitToken("sarthak", roomName);
 
       console.log("LiveKit token received");
 
+      // -----------------------------------
+      // 3. Create LiveKit room
+      // -----------------------------------
+
       const room = new Room();
+
       roomRef.current = room;
 
-      // Listen for remote audio/video tracks BEFORE connecting.
+      // -----------------------------------
+      // 4. Listen for remote tracks
+      // -----------------------------------
+
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         console.log("Remote track subscribed:", {
           kind: track.kind,
@@ -31,6 +64,7 @@ function App() {
 
         if (track.kind === "audio") {
           track.attach();
+
           console.log("Remote audio track attached");
         }
       });
@@ -47,6 +81,10 @@ function App() {
           track.detach();
         },
       );
+
+      // -----------------------------------
+      // 5. Participant events
+      // -----------------------------------
 
       room.on(RoomEvent.ParticipantConnected, (participant) => {
         console.log("Remote participant connected:", {
@@ -66,11 +104,19 @@ function App() {
         console.log("LiveKit connection state:", state);
       });
 
+      // -----------------------------------
+      // 6. Check LiveKit URL
+      // -----------------------------------
+
       const liveKitUrl = import.meta.env.VITE_LIVEKIT_URL;
 
       if (!liveKitUrl) {
         throw new Error("VITE_LIVEKIT_URL is not configured");
       }
+
+      // -----------------------------------
+      // 7. Connect to LiveKit
+      // -----------------------------------
 
       console.log("Connecting to LiveKit...");
 
@@ -78,12 +124,18 @@ function App() {
 
       console.log("Connected to LiveKit room");
 
-      // Explicitly unlock browser audio playback.
+      // -----------------------------------
+      // 8. Enable browser audio playback
+      // -----------------------------------
+
       await room.startAudio();
 
       console.log("Can playback audio:", room.canPlaybackAudio);
 
-      // Inspect remote participants and their published tracks.
+      // -----------------------------------
+      // 9. Inspect remote participants
+      // -----------------------------------
+
       console.log(
         "Remote participants:",
         [...room.remoteParticipants.values()].map((participant) => ({
@@ -100,7 +152,10 @@ function App() {
         })),
       );
 
-      // Enable microphone.
+      // -----------------------------------
+      // 10. Enable microphone
+      // -----------------------------------
+
       await room.localParticipant.setMicrophoneEnabled(true);
 
       console.log(
@@ -108,12 +163,23 @@ function App() {
         room.localParticipant.isMicrophoneEnabled,
       );
 
+      // -----------------------------------
+      // 11. Update UI
+      // -----------------------------------
+
       setIsConnected(true);
 
       console.log("Room:", room.name);
+
       console.log("Participant:", room.localParticipant.identity);
+
+      // -----------------------------------
+      // Temporary debugging
+      // -----------------------------------
+
+      console.log("Learning session:", sessionId);
     } catch (error) {
-      console.error("Failed to connect to LiveKit:", error);
+      console.error("Failed to start learning session:", error);
     } finally {
       setIsConnecting(false);
     }

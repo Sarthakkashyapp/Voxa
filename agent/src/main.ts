@@ -7,6 +7,7 @@ import {
   AgentSession,
   ServerOptions,
   inference,
+  voice,
   type JobContext,
 } from "@livekit/agents";
 
@@ -18,6 +19,12 @@ import { fileURLToPath } from "node:url";
 export default defineAgent({
   entry: async (ctx: JobContext) => {
     console.log("Voxa agent job started");
+
+    const metadata = JSON.parse(ctx.job.metadata);
+
+    const sessionId = metadata.sessionId;
+
+    console.log("Voxa session ID:", sessionId);
 
     await ctx.connect();
 
@@ -62,6 +69,12 @@ Because you are a voice-first tutor:
     });
 
     const session = new AgentSession({
+      turnHandling: {
+        preemptiveGeneration: {
+          enabled: false,
+        },
+      },
+
       stt: new deepgram.STT({
         model: "nova-3",
         language: "en",
@@ -78,6 +91,22 @@ Because you are a voice-first tutor:
       }),
     });
 
+    session.on(voice.AgentSessionEventTypes.ConversationItemAdded, (event) => {
+      const item = event.item;
+
+      console.log("=== CONVERSATION ITEM ===");
+      console.log("Type:", item.type);
+
+      if (item.type !== "message") {
+        console.log("Skipping non-message item");
+        return;
+      }
+
+      console.log("Role:", item.role);
+      console.log("Interrupted:", item.interrupted);
+      console.log("Content:", item.content);
+    });
+
     await session.start({
       room: ctx.room,
       agent: voxa,
@@ -90,5 +119,6 @@ Because you are a voice-first tutor:
 cli.runApp(
   new ServerOptions({
     agent: fileURLToPath(import.meta.url),
+    agentName: "voxa-agent",
   }),
 );
