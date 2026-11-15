@@ -1,11 +1,17 @@
 import { useRef, useState } from "react";
 import { Room, RoomEvent } from "livekit-client";
+
 import { getLiveKitToken } from "./services/livekit";
 import { createSession } from "./services/session";
+import { dispatchAgent } from "./services/agent";
+import { getSessionMessages, type Message } from "./services/message";
 
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const roomRef = useRef<Room | null>(null);
 
@@ -26,25 +32,44 @@ function App() {
 
       console.log("MongoDB session created:", session);
 
-      const sessionId = session._id;
+      const currentSessionId = session._id;
 
-      console.log("Session ID:", sessionId);
+      setSessionId(currentSessionId);
+
+      console.log("Session ID:", currentSessionId);
 
       // -----------------------------------
-      // 2. Get LiveKit token
+      // 2. Fetch existing conversation history
+      // -----------------------------------
+
+      try {
+        console.log("Loading conversation history...");
+
+        const savedMessages = await getSessionMessages(currentSessionId);
+
+        setMessages(savedMessages);
+
+        console.log("Loaded conversation history:", savedMessages);
+      } catch (error) {
+        console.error("Failed to load conversation history:", error);
+
+        setMessages([]);
+      }
+
+      // -----------------------------------
+      // 3. Get LiveKit token
       // -----------------------------------
 
       console.log("Requesting LiveKit token...");
 
       const roomName = `voxa-session-${Date.now()}`;
-      // const roomName = "voxa-test-metadata";
 
       const token = await getLiveKitToken("sarthak", roomName);
 
       console.log("LiveKit token received");
 
       // -----------------------------------
-      // 3. Create LiveKit room
+      // 4. Create LiveKit room
       // -----------------------------------
 
       const room = new Room();
@@ -52,7 +77,7 @@ function App() {
       roomRef.current = room;
 
       // -----------------------------------
-      // 4. Listen for remote tracks
+      // 5. Listen for remote tracks
       // -----------------------------------
 
       room.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
@@ -83,7 +108,7 @@ function App() {
       );
 
       // -----------------------------------
-      // 5. Participant events
+      // 6. Participant events
       // -----------------------------------
 
       room.on(RoomEvent.ParticipantConnected, (participant) => {
@@ -105,7 +130,7 @@ function App() {
       });
 
       // -----------------------------------
-      // 6. Check LiveKit URL
+      // 7. Check LiveKit URL
       // -----------------------------------
 
       const liveKitUrl = import.meta.env.VITE_LIVEKIT_URL;
@@ -115,7 +140,7 @@ function App() {
       }
 
       // -----------------------------------
-      // 7. Connect to LiveKit
+      // 8. Connect to LiveKit
       // -----------------------------------
 
       console.log("Connecting to LiveKit...");
@@ -125,7 +150,7 @@ function App() {
       console.log("Connected to LiveKit room");
 
       // -----------------------------------
-      // 8. Enable browser audio playback
+      // 9. Enable browser audio playback
       // -----------------------------------
 
       await room.startAudio();
@@ -133,7 +158,7 @@ function App() {
       console.log("Can playback audio:", room.canPlaybackAudio);
 
       // -----------------------------------
-      // 9. Inspect remote participants
+      // 10. Inspect remote participants
       // -----------------------------------
 
       console.log(
@@ -153,7 +178,7 @@ function App() {
       );
 
       // -----------------------------------
-      // 10. Enable microphone
+      // 11. Enable microphone
       // -----------------------------------
 
       await room.localParticipant.setMicrophoneEnabled(true);
@@ -164,7 +189,17 @@ function App() {
       );
 
       // -----------------------------------
-      // 11. Update UI
+      // 12. Dispatch AI agent
+      // -----------------------------------
+
+      console.log("Dispatching AI agent to room...");
+
+      const dispatchResult = await dispatchAgent(roomName, currentSessionId);
+
+      console.log("Agent dispatch response:", dispatchResult);
+
+      // -----------------------------------
+      // 13. Update UI
       // -----------------------------------
 
       setIsConnected(true);
@@ -173,17 +208,17 @@ function App() {
 
       console.log("Participant:", room.localParticipant.identity);
 
-      // -----------------------------------
-      // Temporary debugging
-      // -----------------------------------
-
-      console.log("Learning session:", sessionId);
+      console.log("Learning session:", currentSessionId);
     } catch (error) {
       console.error("Failed to start learning session:", error);
     } finally {
       setIsConnecting(false);
     }
   };
+
+  // -----------------------------------
+  // Render UI
+  // -----------------------------------
 
   return (
     <div>
@@ -198,6 +233,24 @@ function App() {
       </button>
 
       {isConnected && <p>Connected to LiveKit successfully!</p>}
+
+      {isConnected && sessionId && (
+        <div>
+          <h2>Conversation History</h2>
+
+          {messages.length === 0 ? (
+            <p>No previous messages in this session.</p>
+          ) : (
+            messages.map((message) => (
+              <div key={message._id}>
+                <strong>{message.role === "user" ? "You" : "Voxa"}</strong>
+
+                <p>{message.content}</p>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
